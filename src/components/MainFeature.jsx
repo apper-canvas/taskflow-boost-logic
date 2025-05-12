@@ -14,6 +14,7 @@ function MainFeature() {
   const CalendarIcon = getIcon('Calendar');
   const TagIcon = getIcon('Tag');
   const UserIcon = getIcon('User');
+  const ArrowLeftIcon = getIcon('ArrowLeft');
   const GripIcon = getIcon('GripVertical');
 
   // State for board data
@@ -44,6 +45,10 @@ function MainFeature() {
   ]);
 
   // State for the currently dragged card
+  const [expandedCard, setExpandedCard] = useState(null);
+  const [expandedCardList, setExpandedCardList] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editCardContent, setEditCardContent] = useState(null);
   const [draggedCard, setDraggedCard] = useState(null);
   const [dragOverList, setDragOverList] = useState(null);
   
@@ -70,6 +75,19 @@ function MainFeature() {
   ];
 
   // Drag and drop handlers
+  const handleCardClick = (card, listId) => {
+    setExpandedCard(card);
+    setExpandedCardList(listId);
+    setEditCardContent({ ...card });
+  };
+
+  const closeExpandedCard = () => {
+    setExpandedCard(null);
+    setExpandedCardList(null);
+    setIsEditing(false);
+    setEditCardContent(null);
+  };
+
   const handleDragStart = (card, listId) => {
     setDraggedCard({ ...card, sourceListId: listId });
   };
@@ -220,6 +238,58 @@ function MainFeature() {
     toast.success('Card deleted!');
   };
 
+  const handleUpdateCard = () => {
+    if (editCardContent.title.trim() === '') {
+      toast.error('Card title cannot be empty');
+      return;
+    }
+    
+    const updatedLists = lists.map(list => {
+      if (list.id === expandedCardList) {
+        return {
+          ...list,
+          cards: list.cards.map(card => 
+            card.id === expandedCard.id ? { ...editCardContent } : card
+          )
+        };
+      }
+      return list;
+    });
+    
+    setLists(updatedLists);
+    setExpandedCard(editCardContent);
+    setIsEditing(false);
+    toast.success('Card updated!');
+  };
+
+  const toggleEditCardLabel = (labelText) => {
+    if (editCardContent.labels.includes(labelText)) {
+      setEditCardContent({
+        ...editCardContent,
+        labels: editCardContent.labels.filter(label => label !== labelText)
+      });
+    } else {
+      setEditCardContent({
+        ...editCardContent,
+        labels: [...editCardContent.labels, labelText]
+      });
+    }
+  };
+
+  const handleDeleteExpandedCard = () => {
+    if (confirm('Are you sure you want to delete this card?')) {
+      const updatedLists = lists.map(list => {
+        if (list.id === expandedCardList) {
+          return { ...list, cards: list.cards.filter(card => card.id !== expandedCard.id) };
+        }
+        return list;
+      });
+      setLists(updatedLists);
+      closeExpandedCard();
+      toast.success('Card deleted!');
+    }
+  };
+
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -240,6 +310,29 @@ function MainFeature() {
         duration: 0.3
       }
     }
+  };
+
+  const modalVariants = {
+    hidden: { opacity: 0, scale: 0.9 },
+    visible: { 
+      opacity: 1, 
+      scale: 1,
+      transition: { 
+        duration: 0.2
+      }
+    },
+    exit: {
+      opacity: 0,
+      scale: 0.9,
+      transition: { 
+        duration: 0.2
+      }
+    }
+  };
+
+  const backdropVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1 }
   };
 
   return (
@@ -308,9 +401,10 @@ function MainFeature() {
                 {list.cards.map((card) => (
                   <div
                     key={card.id}
-                    className="card p-3 mb-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow duration-200"
+                    className="card p-3 mb-2 cursor-pointer hover:shadow-md transition-shadow duration-200"
                     draggable
                     onDragStart={() => handleDragStart(card, list.id)}
+                    onClick={() => handleCardClick(card, list.id)}
                     style={{
                       opacity: draggedCard && draggedCard.id === card.id ? 0.5 : 1,
                       backgroundColor: dragOverList === list.id && draggedCard && draggedCard.id === card.id 
@@ -485,6 +579,180 @@ function MainFeature() {
           </motion.div>
         </div>
       </motion.div>
+
+      {/* Expanded Card Modal */}
+      {expandedCard && (
+        <motion.div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+          variants={backdropVariants}
+          onClick={closeExpandedCard}
+        >
+          <motion.div 
+            className="bg-white dark:bg-surface-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            variants={modalVariants}
+            onClick={e => e.stopPropagation()}
+          >
+            {isEditing ? (
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-semibold">Edit Card</h3>
+                  <button 
+                    onClick={() => setIsEditing(false)}
+                    className="text-surface-500 hover:text-surface-700 dark:hover:text-surface-300"
+                  >
+                    <XIcon className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="mb-4">
+                  <label className="label">Title</label>
+                  <input
+                    type="text"
+                    value={editCardContent.title}
+                    onChange={(e) => setEditCardContent({ ...editCardContent, title: e.target.value })}
+                    className="input py-2"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="label">Description</label>
+                  <textarea
+                    value={editCardContent.description}
+                    onChange={(e) => setEditCardContent({ ...editCardContent, description: e.target.value })}
+                    className="input py-2 min-h-[100px]"
+                    placeholder="Add a more detailed description..."
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="label">Labels</label>
+                  <div className="flex flex-wrap gap-2">
+                    {labelOptions.map((label) => (
+                      <button
+                        key={label.id}
+                        onClick={() => toggleEditCardLabel(label.text)}
+                        className={`px-3 py-1 rounded-full ${
+                          editCardContent.labels.includes(label.text)
+                            ? `${label.color} text-white`
+                            : 'bg-surface-200 dark:bg-surface-700 text-surface-700 dark:text-surface-300'
+                        }`}
+                      >
+                        {label.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="label">Due Date</label>
+                  <input
+                    type="date"
+                    value={editCardContent.dueDate}
+                    onChange={(e) => setEditCardContent({ ...editCardContent, dueDate: e.target.value })}
+                    className="input py-2"
+                  />
+                </div>
+
+                <div className="flex justify-between mt-6">
+                  <button 
+                    onClick={handleDeleteExpandedCard}
+                    className="btn bg-red-500 hover:bg-red-600 text-white"
+                  >
+                    Delete Card
+                  </button>
+                  <button 
+                    onClick={handleUpdateCard}
+                    className="btn-primary"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center">
+                    <button
+                      onClick={closeExpandedCard}
+                      className="mr-2 text-surface-500 hover:text-surface-700 dark:hover:text-surface-300"
+                    >
+                      <ArrowLeftIcon className="h-5 w-5" />
+                    </button>
+                    <h2 className="text-xl font-semibold">{expandedCard.title}</h2>
+                  </div>
+                  <div className="flex">
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="text-surface-500 hover:text-surface-700 dark:hover:text-surface-300 mr-2"
+                    >
+                      <EditIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={handleDeleteExpandedCard}
+                      className="text-surface-500 hover:text-red-500"
+                    >
+                      <TrashIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* List information */}
+                <div className="mb-6 text-sm text-surface-500 dark:text-surface-400">
+                  in list <span className="font-medium">{lists.find(l => l.id === expandedCardList)?.title}</span>
+                </div>
+
+                {/* Description */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-2">Description</h3>
+                  {expandedCard.description ? (
+                    <p className="text-surface-700 dark:text-surface-300 whitespace-pre-line">
+                      {expandedCard.description}
+                    </p>
+                  ) : (
+                    <p className="text-surface-500 dark:text-surface-400 italic">
+                      No description provided.
+                    </p>
+                  )}
+                </div>
+
+                {/* Labels */}
+                {expandedCard.labels && expandedCard.labels.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-2">Labels</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {expandedCard.labels.map((label, index) => {
+                        const labelOption = labelOptions.find(opt => opt.text === label);
+                        return (
+                          <span 
+                            key={index} 
+                            className={`px-3 py-1 rounded-full text-white ${labelOption ? labelOption.color : 'bg-blue-500'}`}
+                          >
+                            {label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Due Date */}
+                {expandedCard.dueDate && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-2">Due Date</h3>
+                    <div className="flex items-center text-surface-700 dark:text-surface-300">
+                      <CalendarIcon className="h-5 w-5 mr-2" />
+                      <span>{new Date(expandedCard.dueDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
       
       {/* Guide */}
       <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
@@ -494,6 +762,7 @@ function MainFeature() {
           <li>Add new lists to customize your workflow</li>
           <li>Create cards with detailed information including labels and due dates</li>
           <li>Edit list titles by clicking the edit icon</li>
+          <li>Click on a card to view full details and make edits</li>
         </ul>
       </div>
     </div>
